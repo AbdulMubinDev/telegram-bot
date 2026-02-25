@@ -339,11 +339,11 @@ async def main_async(lock_path: str):
     if not sys.stdin.isatty() and not os.path.exists(user_session_file):
         print(
             "ERROR: First-time Telegram login required (no user session found).\n"
-            "Run interactively: ./start.sh login\n"
-            "Then enter your phone number and code. After that, run ./start.sh to start in background.",
+            "Run: docker compose down && ./start.sh login\n"
+            "Enter phone and code, then Ctrl+C, then ./start.sh",
             file=sys.stderr
         )
-        sys.exit(1)
+        sys.exit(0)  # exit 0 so container does not restart in a loop
     await user_client.start()
     await bot_client.start(bot_token=BOT_TOKEN)
     log.info("Both Telegram clients connected.")
