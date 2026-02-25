@@ -26,10 +26,11 @@ if [ ! -f data/credentials.json ]; then
   exit 1
 fi
 
-# First-time Telegram login: run interactively once, then use start.sh for background
+# First-time Telegram login: run with TTY so you can enter phone + code
 if [ "${1:-}" = "login" ]; then
-  echo "Running agent once for Telegram login (phone + code). After success, Ctrl+C and run ./start.sh without 'login'."
-  docker compose run --rm telegram-agent python main.py
+  echo "Stop the background container first (if running): docker compose down"
+  echo "Running agent for Telegram login. Enter your phone and code when prompted, then Ctrl+C and run ./start.sh"
+  docker compose run --rm -it telegram-agent python main.py
   exit 0
 fi
 

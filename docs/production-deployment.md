@@ -322,12 +322,10 @@ If your VPS already runs Docker/containerd, you can run the agent in a container
    mkdir -p data
    # Copy your credentials file to data/credentials.json
   ```
-4. **First-time Telegram login** (once per machine/container): run the agent interactively and complete phone + code. Sessions are stored in `data/` and persist for next runs.
-  ```bash
-   chmod +x start.sh
-   ./start.sh login
-  ```
-   When you see "Both Telegram clients connected", complete login if prompted, then press Ctrl+C.
+4. **First-time Telegram login** (once per machine): the agent needs your Telegram user account (phone + code) to read the source channel. **Do not** start in background until this is done.
+   - If the container is already running in background: `docker compose down`
+   - Run **interactively** (so you can type phone and code): `./start.sh login`
+   - When prompted, enter your phone number (with country code) and the code Telegram sends you. When you see "Both Telegram clients connected", press Ctrl+C. Session files are saved in `data/` and persist.
 5. **Start the agent in the background:**
   ```bash
    ./start.sh

@@ -18,13 +18,19 @@ SOURCE_CHANNEL = os.getenv('SOURCE_CHANNEL')
 DEST_CHANNEL_ID = int(os.getenv('DEST_CHANNEL_ID'))
 TEMP_DIR = os.getenv('TEMP_DIR')
 
+# Session files in same dir as state.json so they persist in Docker (data/ volume)
+STATE_FILE = os.getenv('STATE_FILE', 'state.json')
+SESSION_DIR = os.path.dirname(os.path.abspath(STATE_FILE))
+USER_SESSION_PATH = os.path.join(SESSION_DIR, 'user_session')
+BOT_SESSION_PATH = os.path.join(SESSION_DIR, 'bot_session')
+
 
 def get_user_client():
-    return TelegramClient('user_session', API_ID, API_HASH)
+    return TelegramClient(USER_SESSION_PATH, API_ID, API_HASH)
 
 
 def get_bot_client():
-    return TelegramClient('bot_session', API_ID, API_HASH)
+    return TelegramClient(BOT_SESSION_PATH, API_ID, API_HASH)
 
 
 async def get_all_posts(client, last_processed_id: int = 0) -> list:

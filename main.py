@@ -16,7 +16,7 @@ from telethon.errors import FloodWaitError
 from telegram_handler import (
     get_user_client, get_bot_client, get_all_posts,
     download_file, upload_file, get_last_dest_post,
-    get_filename, get_size
+    get_filename, get_size, USER_SESSION_PATH
 )
 from drive_handler import (
     upload_to_drive, download_from_drive,
@@ -334,6 +334,16 @@ async def main_async(lock_path: str):
 
     user_client = get_user_client()
     bot_client = get_bot_client()
+    # Require interactive terminal for first-time login (phone + code)
+    user_session_file = USER_SESSION_PATH + '.session'
+    if not sys.stdin.isatty() and not os.path.exists(user_session_file):
+        print(
+            "ERROR: First-time Telegram login required (no user session found).\n"
+            "Run interactively: ./start.sh login\n"
+            "Then enter your phone number and code. After that, run ./start.sh to start in background.",
+            file=sys.stderr
+        )
+        sys.exit(1)
     await user_client.start()
     await bot_client.start(bot_token=BOT_TOKEN)
     log.info("Both Telegram clients connected.")
