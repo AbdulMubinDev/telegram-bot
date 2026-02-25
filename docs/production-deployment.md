@@ -93,18 +93,20 @@ Assumed setup:
 
 Rough split so the website and system are safe:
 
-| Use | Size (guideline) |
-|-----|-------------------|
-| OS + system | ~5–10 GB |
-| Website (code, assets, data) | Keep your current usage + growth |
-| **Agent (Python, venv, temp, logs)** | **~25–35 GB** reserved |
+
+| Use                                  | Size (guideline)                 |
+| ------------------------------------ | -------------------------------- |
+| OS + system                          | ~5–10 GB                         |
+| Website (code, assets, data)         | Keep your current usage + growth |
+| **Agent (Python, venv, temp, logs)** | **~25–35 GB** reserved           |
+
 
 Agent usage in practice:
 
 - Python + venv: ~0.5–1 GB  
 - **Temp directory**: up to **~8 GB** at peak (one large file from Telegram + one re-download from Drive)  
 - Logs (with rotation): ~0.5–1 GB  
-- State and session files: negligible  
+- State and session files: negligible
 
 So reserve **at least 25–35 GB** free for the agent (e.g. don’t let the website or other apps use the whole disk). Monitor free space (e.g. `df -h` and `du -sh /opt/telegram-agent/temp`) so temp never fills during large uploads.
 
@@ -186,8 +188,8 @@ sudo -u telegram-agent mkdir -p /opt/telegram-agent/temp /opt/telegram-agent/log
 
 - Place the Google service account JSON on the server (e.g. `/opt/telegram-agent/credentials.json`).
 - Restrict permissions:  
-  `sudo chown telegram-agent:telegram-agent /opt/telegram-agent/credentials.json`  
-  `sudo chmod 600 /opt/telegram-agent/credentials.json`
+`sudo chown telegram-agent:telegram-agent /opt/telegram-agent/credentials.json`  
+`sudo chmod 600 /opt/telegram-agent/credentials.json`
 
 ---
 
@@ -204,24 +206,28 @@ sudo -u telegram-agent nano /opt/telegram-agent/.env
 
 Use **absolute paths** under `/opt/telegram-agent`:
 
-| Variable | Example | Description |
-|----------|---------|-------------|
-| `TG_API_ID` | `12345678` | From [my.telegram.org](https://my.telegram.org) |
-| `TG_API_HASH` | `your_api_hash` | From my.telegram.org |
-| `BOT_TOKEN` | `123456:ABC...` | From @BotFather |
-| `SOURCE_CHANNEL` | `sourcechannel` | Source channel username (no @) |
-| `DEST_CHANNEL_ID` | `-1001234567890` | Destination channel ID (numeric) |
-| `DRIVE_ROOT_FOLDER_ID` | `1abc...` | Google Drive folder ID (from URL) |
-| `CREDENTIALS_PATH` | `/opt/telegram-agent/credentials.json` | Service account JSON path |
-| `TEMP_DIR` | `/opt/telegram-agent/temp` | Temp directory for downloads |
-| `STATE_FILE` | `/opt/telegram-agent/state.json` | State file path |
-| `LOG_FILE` | `/opt/telegram-agent/logs/agent.log` | Log file path |
+
+| Variable               | Example                                | Description                                     |
+| ---------------------- | -------------------------------------- | ----------------------------------------------- |
+| `TG_API_ID`            | `12345678`                             | From [my.telegram.org](https://my.telegram.org) |
+| `TG_API_HASH`          | `your_api_hash`                        | From my.telegram.org                            |
+| `BOT_TOKEN`            | `123456:ABC...`                        | From @BotFather                                 |
+| `SOURCE_CHANNEL`       | `sourcechannel`                        | Source channel username (no @)                  |
+| `DEST_CHANNEL_ID`      | `-1001234567890`                       | Destination channel ID (numeric)                |
+| `DRIVE_ROOT_FOLDER_ID` | `1abc...`                              | Google Drive folder ID (from URL)               |
+| `CREDENTIALS_PATH`     | `/opt/telegram-agent/credentials.json` | Service account JSON path                       |
+| `TEMP_DIR`             | `/opt/telegram-agent/temp`             | Temp directory for downloads                    |
+| `STATE_FILE`           | `/opt/telegram-agent/state.json`       | State file path                                 |
+| `LOG_FILE`             | `/opt/telegram-agent/logs/agent.log`   | Log file path                                   |
+
 
 Optional (for admin panel):
 
-| Variable | Example | Description |
-|----------|---------|-------------|
+
+| Variable         | Example               | Description                                                    |
+| ---------------- | --------------------- | -------------------------------------------------------------- |
 | `ADMIN_USER_IDS` | `123456789,987654321` | Comma-separated Telegram user IDs allowed to send bot commands |
+
 
 ### 6.3 Secure `.env`
 
@@ -245,8 +251,8 @@ sudo chmod 600 /opt/telegram-agent/.env
 1. Create a Google Cloud project and enable **Google Drive API**.
 2. Create a **Service Account**, download JSON, save as `credentials.json` at `CREDENTIALS_PATH`.
 3. In Google Drive, create a folder (e.g. `TelegramArchive`), share it with the service account email (e.g. `xxx@yyy.iam.gserviceaccount.com`) as **Editor**.
-4. Open the folder in the browser; the folder ID is in the URL:  
-   `https://drive.google.com/drive/folders/FOLDER_ID`.
+4. Open the folder in the browser; the folder ID is in the URL:
+  `https://drive.google.com/drive/folders/FOLDER_ID`.
 
 ---
 
@@ -305,33 +311,28 @@ If your VPS already runs Docker/containerd, you can run the agent in a container
 **Steps:**
 
 1. **Copy the project** to the server (e.g. `/opt/telegram-agent` or your home). Ensure it contains `Dockerfile`, `docker-compose.yml`, `start.sh`, and all `.py` files.
-
 2. **Create `.env`** for Docker (paths must be the ones used inside the container):
-   ```bash
+  ```bash
    cp .env.example.docker .env
    nano .env   # set TG_API_ID, TG_API_HASH, BOT_TOKEN, SOURCE_CHANNEL, DEST_CHANNEL_ID, DRIVE_ROOT_FOLDER_ID, ADMIN_USER_IDS
-   ```
+  ```
    Do **not** change `CREDENTIALS_PATH`, `TEMP_DIR`, `STATE_FILE`, or `LOG_FILE` in `.env` — they must stay as in `.env.example.docker` (`/app/data/...`) so the container finds them.
-
 3. **Put the Google service account JSON** in the `data/` folder:
-   ```bash
+  ```bash
    mkdir -p data
    # Copy your credentials file to data/credentials.json
-   ```
-
+  ```
 4. **First-time Telegram login** (once per machine/container): run the agent interactively and complete phone + code. Sessions are stored in `data/` and persist for next runs.
-   ```bash
+  ```bash
    chmod +x start.sh
    ./start.sh login
-   ```
+  ```
    When you see "Both Telegram clients connected", complete login if prompted, then press Ctrl+C.
-
 5. **Start the agent in the background:**
-   ```bash
+  ```bash
    ./start.sh
-   ```
+  ```
    The script creates `data/temp` and `data/logs`, checks for `.env` and `data/credentials.json`, then runs `docker compose up -d --build`.
-
 6. **Control and monitor from Telegram:** Open a **private chat** with your bot and send `/status`, `/pause`, `/resume`, `/logs`, `/help`. No port or URL on the server is needed; the bot connects outbound to Telegram and receives your messages over that connection.
 
 **Useful Docker commands:**
@@ -444,10 +445,10 @@ sudo -u telegram-agent cp /opt/telegram-agent/state.json /opt/telegram-agent/sta
 If you get `AuthKeyError` or session invalid:
 
 1. Stop the agent: `sudo systemctl stop telegram-agent`
-2. Remove session files:  
-   `sudo rm /opt/telegram-agent/user_session.session /opt/telegram-agent/bot_session.session`
-3. Run once **interactively over SSH**:  
-   `cd /opt/telegram-agent && sudo -u telegram-agent /opt/telegram-agent/venv/bin/python main.py`  
+2. Remove session files:
+  `sudo rm /opt/telegram-agent/user_session.session /opt/telegram-agent/bot_session.session`
+3. Run once **interactively over SSH**:
+  `cd /opt/telegram-agent && sudo -u telegram-agent /opt/telegram-agent/venv/bin/python main.py`  
    Complete phone + code login.
 4. Ctrl+C, then: `sudo systemctl start telegram-agent`
 
@@ -455,16 +456,18 @@ If you get `AuthKeyError` or session invalid:
 
 ## 12. Troubleshooting
 
-| Symptom | What to check |
-|---------|----------------|
-| Agent exits immediately | `.env` missing or wrong; run without systemd to see traceback; check `agent-error.log`. |
-| “Another instance may be running” | Another process is using the same lock file; kill the other process or remove `agent.lock` if the process is gone. |
-| ChannelPrivateError / can’t read source | Source channel username correct; user account in the channel if it’s private. |
-| ChatWriteForbiddenError | Bot not admin in destination channel or missing “Post messages” / “Send files”. |
-| Drive 403 / upload fails | Drive folder shared with service account email; Drive API enabled. |
-| Disk full | Free space in `TEMP_DIR`; clear `temp/`; ensure enough of the 75 GB is reserved for the agent; reduce log retention. |
-| FloodWaitError | Handled by script (wait + retry); if frequent, reduce posting rate or wait. |
-| Website affected | Agent runs as `telegram-agent` under `/opt/telegram-agent`; ensure no nginx/web root points there and no new ports are opened. |
+
+| Symptom                                 | What to check                                                                                                                  |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Agent exits immediately                 | `.env` missing or wrong; run without systemd to see traceback; check `agent-error.log`.                                        |
+| “Another instance may be running”       | Another process is using the same lock file; kill the other process or remove `agent.lock` if the process is gone.             |
+| ChannelPrivateError / can’t read source | Source channel username correct; user account in the channel if it’s private.                                                  |
+| ChatWriteForbiddenError                 | Bot not admin in destination channel or missing “Post messages” / “Send files”.                                                |
+| Drive 403 / upload fails                | Drive folder shared with service account email; Drive API enabled.                                                             |
+| Disk full                               | Free space in `TEMP_DIR`; clear `temp/`; ensure enough of the 75 GB is reserved for the agent; reduce log retention.           |
+| FloodWaitError                          | Handled by script (wait + retry); if frequent, reduce posting rate or wait.                                                    |
+| Website affected                        | Agent runs as `telegram-agent` under `/opt/telegram-agent`; ensure no nginx/web root points there and no new ports are opened. |
+
 
 For more errors and fixes, see the main technical docs (`telegram-agent-technical-docs-v3.md`) “Common Errors & Fixes” section.
 
