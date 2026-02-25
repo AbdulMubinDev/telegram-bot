@@ -16,10 +16,10 @@ class BundleDeduplicationEngine:
         self._index: set = set()
         self._loaded = False
 
-    async def load(self, bot_client, fetch_limit: int = 500):
-        """Loads destination channel history into the dedup index. Call once at startup."""
+    async def load(self, user_client, fetch_limit: int = 500):
+        """Loads destination channel history into the dedup index. Call once at startup. Uses user client (bots cannot read channel history)."""
         print(f"Loading dedup index from destination channel ({fetch_limit} posts)...")
-        posts = await get_destination_posts(bot_client, limit=fetch_limit)
+        posts = await get_destination_posts(user_client, limit=fetch_limit)
         for filename, size in posts:
             bundle_info = detect_bundle(filename)
             key = build_dedup_key(bundle_info, size)

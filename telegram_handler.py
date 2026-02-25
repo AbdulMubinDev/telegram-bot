@@ -94,8 +94,9 @@ async def upload_file(bot_client, file_path: str, caption: str) -> int:
     return msg.id
 
 
-async def get_last_dest_post(bot_client) -> dict:
-    async for msg in bot_client.iter_messages(DEST_CHANNEL_ID, limit=1):
+async def get_last_dest_post(client) -> dict:
+    """Use user client (bots cannot read channel history)."""
+    async for msg in client.iter_messages(DEST_CHANNEL_ID, limit=1):
         return {'filename': get_filename(msg), 'size': get_size(msg)}
     return {}
 

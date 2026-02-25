@@ -221,7 +221,7 @@ async def process_message(user_client, bot_client, message, state, dedup):
 
         log.info(f"[{msg_id}] 5/5 Verifying upload...")
         drive_meta = get_last_drive_file_in_folder(bundle_info['bundle_id'])
-        tg_last = await get_last_dest_post(bot_client)
+        tg_last = await get_last_dest_post(user_client)
 
         drive_name = drive_meta.get('name', '').lower().strip()
         tg_name = tg_last.get('filename', '').lower().strip()
@@ -351,7 +351,7 @@ async def main_async(lock_path: str):
     await register_admin_handlers(bot_client, paused_ref)
 
     dedup = BundleDeduplicationEngine()
-    await dedup.load(bot_client, fetch_limit=500)
+    await dedup.load(user_client, fetch_limit=500)
 
     if state['mode'] == 'historical':
         state = await run_historical(user_client, bot_client, state, dedup, paused_ref)
