@@ -1,0 +1,15 @@
+# Telegram Repost Agent v3 — Docker Compose
+# No ports are exposed; the agent only makes outbound connections.
+# Run: ./start.sh  (after setting .env and putting credentials in data/)
+
+services:
+  telegram-agent:
+    build: .
+    image: telegram-repost-agent:latest
+    container_name: telegram-repost-agent
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # Persistent data: state, sessions, temp, logs, credentials
+      - ./data:/app/data
+    # No 'ports:' — no inbound access; outbound only (Telegram, Google)
