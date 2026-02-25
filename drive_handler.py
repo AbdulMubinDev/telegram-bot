@@ -13,13 +13,25 @@ from dotenv import load_dotenv
 load_dotenv()
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
-CREDENTIALS_PATH = os.getenv('CREDENTIALS_PATH')
 DRIVE_ROOT_FOLDER_ID = os.getenv('DRIVE_ROOT_FOLDER_ID')
 
 
+def _resolve_credentials_path():
+    """Use CREDENTIALS_PATH from env, or credentials.json next to STATE_FILE (e.g. /app/data/ in Docker)."""
+    path = os.getenv('CREDENTIALS_PATH')
+    if path and os.path.isfile(path):
+        return path
+    state_file = os.getenv('STATE_FILE', 'state.json')
+    fallback = os.path.join(os.path.dirname(os.path.abspath(state_file)), 'credentials.json')
+    if os.path.isfile(fallback):
+        return fallback
+    return path or fallback
+
+
 def get_drive_service():
+    creds_path = _resolve_credentials_path()
     creds = service_account.Credentials.from_service_account_file(
-        CREDENTIALS_PATH, scopes=SCOPES
+        creds_path, scopes=SCOPES
     )
     return build('drive', 'v3', credentials=creds)
 

@@ -111,6 +111,11 @@ def get_filename(message) -> str:
     return ''
 
 
+def get_message_caption(message) -> str:
+    """Full text/caption of the message (for reposting so destination looks like source)."""
+    return (message.text or '').strip()
+
+
 def get_size(message) -> int:
     if message.document:
         return message.document.size

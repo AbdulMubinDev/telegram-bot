@@ -16,7 +16,7 @@ from telethon.errors import FloodWaitError
 from telegram_handler import (
     get_user_client, get_bot_client, get_all_posts,
     download_file, upload_file, get_last_dest_post,
-    get_filename, get_size, USER_SESSION_PATH
+    get_filename, get_size, get_message_caption, USER_SESSION_PATH
 )
 from drive_handler import (
     upload_to_drive, download_from_drive,
@@ -209,12 +209,14 @@ async def process_message(user_client, bot_client, message, state, dedup):
         download_from_drive(drive_file_id, local_ul)
 
         log.info(f"[{msg_id}] 4/5 Uploading to destination channel...")
+        # Use same caption/text as source so the repost looks the same; fallback to filename for dedup
+        caption = get_message_caption(message) or filename
         try:
-            await upload_file(bot_client, local_ul, caption=filename)
+            await upload_file(bot_client, local_ul, caption=caption)
         except FloodWaitError as e:
             log.warning(f"[{msg_id}] FloodWait {e.seconds}s — waiting then retrying...")
             await asyncio.sleep(e.seconds + 5)
-            await upload_file(bot_client, local_ul, caption=filename)
+            await upload_file(bot_client, local_ul, caption=caption)
 
         os.remove(local_ul)
         local_ul = None
