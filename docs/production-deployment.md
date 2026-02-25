@@ -344,6 +344,16 @@ docker compose down         # stop
 ./start.sh                  # start again
 ```
 
+**Permissions (if you cloned or copied with sudo):** If the project is owned by root, your user may get "permission denied" when running `./start.sh` or `docker compose logs`. Fix ownership so your user can run Docker without sudo:
+
+```bash
+sudo chown -R $(whoami):$(whoami) /opt/telegram-bot
+```
+
+Then run `./start.sh` and `docker compose logs -f` as your user (no sudo).
+
+**Docker .env paths:** When running in Docker, `.env` must use the **container** paths from `.env.example.docker`: `CREDENTIALS_PATH=/app/data/credentials.json`, `TEMP_DIR=/app/data/temp`, `STATE_FILE=/app/data/state.json`, `LOG_FILE=/app/data/logs/agent.log`. If you used a non-Docker `.env` (e.g. `/opt/telegram-agent/...`), the container will try to write to paths that don’t exist and you’ll see errors like "Could not create lock file". Copy `.env.example.docker` to `.env`, fill in your secrets, and leave those four path variables unchanged.
+
 ---
 
 ## 9. Admin panel (optional)

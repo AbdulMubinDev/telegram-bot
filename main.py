@@ -51,7 +51,15 @@ def validate_env():
 def setup_lockfile():
     """Create lockfile to prevent two instances (spec Part 10 rule 8)."""
     state_file = os.getenv('STATE_FILE', 'state.json')
-    lock_path = os.path.join(os.path.dirname(os.path.abspath(state_file)), 'agent.lock')
+    lock_dir = os.path.dirname(os.path.abspath(state_file))
+    # If state dir doesn't exist (e.g. .env has wrong path in Docker), use TEMP_DIR so lock can be created
+    if lock_dir and not os.path.isdir(lock_dir):
+        lock_dir = os.getenv('TEMP_DIR', os.getcwd())
+    lock_path = os.path.join(lock_dir, 'agent.lock')
+    try:
+        os.makedirs(lock_dir, exist_ok=True)
+    except OSError:
+        pass
     if os.path.exists(lock_path):
         try:
             with open(lock_path, 'r') as f:
