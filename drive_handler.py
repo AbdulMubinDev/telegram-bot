@@ -17,7 +17,7 @@ DRIVE_ROOT_FOLDER_ID = os.getenv('DRIVE_ROOT_FOLDER_ID')
 
 
 def _resolve_credentials_path():
-    """Use CREDENTIALS_PATH from env, or credentials.json next to STATE_FILE (e.g. /app/data/ in Docker)."""
+    """Use CREDENTIALS_PATH from env, or find credentials.json in standard locations (e.g. /app/data/ in Docker)."""
     path = os.getenv('CREDENTIALS_PATH')
     if path and os.path.isfile(path):
         return path
@@ -25,6 +25,10 @@ def _resolve_credentials_path():
     fallback = os.path.join(os.path.dirname(os.path.abspath(state_file)), 'credentials.json')
     if os.path.isfile(fallback):
         return fallback
+    # Docker: volume is usually mounted at /app/data; .env may still have host paths
+    for docker_path in ('/app/data/credentials.json', os.path.join(os.getcwd(), 'data', 'credentials.json')):
+        if os.path.isfile(docker_path):
+            return docker_path
     return path or fallback
 
 
