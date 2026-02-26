@@ -6,8 +6,9 @@ import os
 from telethon import events
 from telethon.errors import MessageTooLongError
 from dotenv import load_dotenv
-from state_manager import load_state
-from retry_failed import run_retry_failed
+
+from .state_manager import load_state
+from .retry_failed import run_retry_failed
 
 load_dotenv()
 LOG_FILE = os.getenv('LOG_FILE', 'logs/agent.log')

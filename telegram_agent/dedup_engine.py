@@ -2,8 +2,8 @@
 Bundle-aware deduplication engine (v3.0).
 Composite key: (bundle_id, part_number, file_size_bytes).
 """
-from bundle_detector import detect_bundle, build_dedup_key
-from telegram_handler import get_destination_posts
+from .bundle_detector import detect_bundle, build_dedup_key
+from .telegram_handler import get_destination_posts
 
 
 class BundleDeduplicationEngine:

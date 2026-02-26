@@ -1,7 +1,11 @@
 """
-Unit test for bundle detector. Run before deployment (no Telegram needed).
+Unit test for bundle detector. Run from project root: python tests/test_bundle_detector.py or python -m pytest tests/
 """
-from bundle_detector import detect_bundle, build_dedup_key
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from telegram_agent.bundle_detector import detect_bundle, build_dedup_key
 
 test_files = [
     ("StationX - The Complete Python for Hacking Bundle.zip.001", 3900 * 1024 * 1024),

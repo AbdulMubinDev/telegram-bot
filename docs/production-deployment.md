@@ -215,10 +215,12 @@ Use **absolute paths** under `/opt/telegram-agent`:
 | `SOURCE_CHANNEL`       | `sourcechannel`                        | Source channel username (no @)                  |
 | `DEST_CHANNEL_ID`      | `-1001234567890`                       | Destination channel ID (numeric)                |
 | `DRIVE_ROOT_FOLDER_ID` | `1abc...`                              | Google Drive folder ID (from URL)               |
-| `CREDENTIALS_PATH`     | `/opt/telegram-agent/credentials.json` | Service account JSON path                       |
-| `TEMP_DIR`             | `/opt/telegram-agent/temp`             | Temp directory for downloads                    |
-| `STATE_FILE`           | `/opt/telegram-agent/state.json`       | State file path                                 |
-| `LOG_FILE`             | `/opt/telegram-agent/logs/agent.log`   | Log file path                                   |
+| `CREDENTIALS_PATH`     | `data/credentials.json`                | Service account JSON (or absolute path)         |
+| `TEMP_DIR`             | `data/temp`                            | Temp directory for downloads                    |
+| `STATE_FILE`           | `data/state.json`                      | State file path                                 |
+| `LOG_FILE`             | `data/logs/agent.log`                  | Log file path                                   |
+
+Paths are **relative to the project root** (Django-style `BASE_DIR`) and work on any OS; you can also use absolute paths.
 
 
 Optional (for admin panel):
@@ -311,12 +313,12 @@ If your VPS already runs Docker/containerd, you can run the agent in a container
 **Steps:**
 
 1. **Copy the project** to the server (e.g. `/opt/telegram-agent` or your home). Ensure it contains `Dockerfile`, `docker-compose.yml`, `start.sh`, and all `.py` files.
-2. **Create `.env`** for Docker (paths must be the ones used inside the container):
+2. **Create `.env`** for Docker:
   ```bash
    cp .env.example.docker .env
-   nano .env   # set TG_API_ID, TG_API_HASH, BOT_TOKEN, SOURCE_CHANNEL, DEST_CHANNEL_ID, DRIVE_ROOT_FOLDER_ID, ADMIN_USER_IDS
+   nano .env   # set TG_API_ID, TG_API_HASH, BOT_TOKEN, SOURCE_CHANNEL, DEST_CHANNEL_ID, ADMIN_USER_IDS
   ```
-   Do **not** change `CREDENTIALS_PATH`, `TEMP_DIR`, `STATE_FILE`, or `LOG_FILE` in `.env` — they must stay as in `.env.example.docker` (`/app/data/...`) so the container finds them.
+   Use the **relative paths** from `.env.example.docker` (`data/temp`, `data/state.json`, etc.). They are resolved against the project root (in Docker, `/app`), so they become `/app/data/...` and work on any OS.
 3. **Put the Google service account JSON** in the `data/` folder:
   ```bash
    mkdir -p data
@@ -350,7 +352,7 @@ sudo chown -R $(whoami):$(whoami) /opt/telegram-bot
 
 Then run `./start.sh` and `docker compose logs -f` as your user (no sudo).
 
-**Docker .env paths:** When running in Docker, `.env` must use the **container** paths from `.env.example.docker`: `CREDENTIALS_PATH=/app/data/credentials.json`, `TEMP_DIR=/app/data/temp`, `STATE_FILE=/app/data/state.json`, `LOG_FILE=/app/data/logs/agent.log`. If you used a non-Docker `.env` (e.g. `/opt/telegram-agent/...`), the container will try to write to paths that don’t exist and you’ll see errors like "Could not create lock file". Copy `.env.example.docker` to `.env`, fill in your secrets, and leave those four path variables unchanged.
+**Paths in .env:** Use **relative paths** (e.g. `data/temp`, `data/logs/agent.log`) so they work on any OS. The app resolves them against the project root (`BASE_DIR`). In Docker, the project root is `/app`, so `data/temp` becomes `/app/data/temp`. If you use absolute host paths in `.env`, the container may not find them; stick to the relative paths from `.env.example.docker`.
 
 ---
 

@@ -7,8 +7,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Application code
-COPY *.py ./
+# Application code (entry point + package)
+COPY main.py ./
+COPY telegram_agent/ telegram_agent/
 
 # Persistent data (state, sessions, temp, logs, credentials) live in /app/data (mounted)
 RUN mkdir -p /app/data/temp /app/data/logs
