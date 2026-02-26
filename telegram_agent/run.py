@@ -31,7 +31,8 @@ from .state_manager import (
 from .admin_handler import register_admin_handlers
 
 USE_DRIVE_STAGING = os.getenv('USE_DRIVE_STAGING', 'false').lower() in ('true', '1', 'yes')
-CONCURRENT_FILES = max(1, int(os.getenv('CONCURRENT_FILES', '2')))  # parallel downloads for large files (2–4)
+# Must be 1: Telethon shares one SQLite session per client; CONCURRENT_FILES>1 causes "database is locked"
+CONCURRENT_FILES = 1
 
 REQUIRED_ENV = [
     'TG_API_ID', 'TG_API_HASH', 'BOT_TOKEN', 'SOURCE_CHANNEL',
@@ -423,7 +424,8 @@ async def main_async(lock_path: str):
     else:
         log.info("Drive staging: OFF — direct mode (files posted to destination with same filename as source).")
     if CONCURRENT_FILES > 1:
-        log.info(f"Parallel downloads: up to {CONCURRENT_FILES} files at a time (set CONCURRENT_FILES in .env).")
+        log.info(f"Parallel downloads: up to {CONCURRENT_FILES} files at a time.")
+    # CONCURRENT_FILES is forced to 1 because Telethon's SQLite session does not support concurrent access
     from . import telegram_handler as th
     if th.PARALLEL_DOWNLOAD_THRESHOLD > 0:
         log.info(

@@ -475,6 +475,7 @@ If you get `AuthKeyError` or session invalid:
 | ChatWriteForbiddenError                 | Bot not admin in destination channel or missing “Post messages” / “Send files”.                                                |
 | Drive 403 / upload fails                | Drive folder shared with service account email; Drive API enabled.                                                             |
 | **storageQuotaExceeded** (Drive)        | **Set `USE_DRIVE_STAGING=false` in `.env`.** Service accounts have no quota on personal Drive. Direct mode posts to destination with the same filename as the source. |
+| **database is locked** / **Cannot send requests while disconnected** | Caused by using more than one concurrent file task with Telethon’s SQLite session. The app uses `CONCURRENT_FILES=1` only. Do not set `CONCURRENT_FILES` above 1. |
 | Disk full                               | Free space in `TEMP_DIR`; clear `temp/`; ensure enough of the 75 GB is reserved for the agent; reduce log retention.           |
 | FloodWaitError                          | Handled by script (wait + retry); if frequent, reduce posting rate or wait.                                                    |
 | Website affected                        | Agent runs as `telegram-agent` under `/opt/telegram-agent`; ensure no nginx/web root points there and no new ports are opened. |
