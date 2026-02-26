@@ -89,15 +89,23 @@ BOT_UPLOAD_LIMIT = 50 * 1024 * 1024  # 50 MB
 
 async def upload_file(bot_client, file_path: str, caption: str, user_client=None, file_name: str = None) -> int:
     """Upload to destination. Uses user_client for files > 50 MB (bot API limit).
-    file_name: display name in Telegram (defaults to path basename). Use original filename so destination matches source."""
+    file_name: display name in Telegram — must be the original filename so destination matches source (no dl_xxx_ prefix)."""
     file_size = os.path.getsize(file_path)
     use_user = user_client and file_size > BOT_UPLOAD_LIMIT
     client = user_client if use_user else bot_client
     via = "user-client" if use_user else "bot"
-    display_name = file_name or os.path.basename(file_path)
+    # Always use original filename so destination shows same name as source (never dl_123_name)
+    display_name = (file_name or os.path.basename(file_path)).strip() or os.path.basename(file_path)
+    # Strip any dl_<id>_ prefix if caller ever passed temp name
+    if display_name.startswith("dl_") and "_" in display_name[3:]:
+        rest = display_name[3:].split("_", 1)
+        if len(rest) == 2 and rest[0].isdigit():
+            display_name = rest[1]
     print(f"  Uploading to destination channel via {via} ({file_size / (1024*1024):.1f} MB) as '{display_name}'...")
     msg = await client.send_file(
-        DEST_CHANNEL_ID, file_path, caption=caption, file_name=display_name,
+        DEST_CHANNEL_ID, file_path, caption=caption,
+        file_name=display_name,
+        attributes=[DocumentAttributeFilename(display_name)],
         progress_callback=lambda c, t: print(f"  TG UL: {c/t*100:.1f}%", end='\r')
     )
     print(f"\n  Uploaded. Message ID: {msg.id}")

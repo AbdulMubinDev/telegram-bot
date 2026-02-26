@@ -31,6 +31,7 @@ from .state_manager import (
 from .admin_handler import register_admin_handlers
 
 USE_DRIVE_STAGING = os.getenv('USE_DRIVE_STAGING', 'false').lower() in ('true', '1', 'yes')
+CONCURRENT_FILES = max(1, int(os.getenv('CONCURRENT_FILES', '2')))  # parallel downloads for large files (2–4)
 
 REQUIRED_ENV = [
     'TG_API_ID', 'TG_API_HASH', 'BOT_TOKEN', 'SOURCE_CHANNEL',
@@ -153,38 +154,60 @@ def upload_to_drive_with_retry(file_path: str, filename: str, bundle_id: str) ->
     raise last_error
 
 
-async def process_message(user_client, bot_client, message, state, dedup):
+async def process_message(user_client, bot_client, message, state, dedup, state_lock=None):
     msg_id = message.id
     start_time = time.monotonic()
 
-    if msg_id in state['processed_ids']:
-        return state
+    if state_lock:
+        async with state_lock:
+            state = load_state()
+            if msg_id in state['processed_ids']:
+                return state
+            if not message.document:
+                log.info(f"[{msg_id}] No file — skipping")
+                return mark_processed(state, msg_id)
+            filename = get_filename(message)
+            file_size = get_size(message)
+            if not filename:
+                log.info(f"[{msg_id}] Document with no filename — skipping")
+                return mark_processed(state, msg_id)
+            bundle_info = detect_bundle(filename)
+            if dedup.is_duplicate(filename, file_size):
+                log.info(f"[{msg_id}] DUPLICATE — skipping.")
+                state = mark_duplicate(state, msg_id)
+                log.info(f"[{msg_id}] Total time: {time.monotonic() - start_time:.1f}s")
+                return state
+            # committed to process; release lock for download/upload
+    else:
+        if msg_id in state['processed_ids']:
+            return state
+        if not message.document:
+            log.info(f"[{msg_id}] No file — skipping")
+            return mark_processed(state, msg_id)
+        filename = get_filename(message)
+        file_size = get_size(message)
+        if not filename:
+            log.info(f"[{msg_id}] Document with no filename — skipping")
+            return mark_processed(state, msg_id)
+        bundle_info = detect_bundle(filename)
+        size_mb = file_size / (1024 * 1024)
+        log.info(
+            f"[{msg_id}] File: '{filename}' ({size_mb:.1f} MB) | "
+            f"Bundle: '{bundle_info['bundle_id']}' | "
+            f"Part: {bundle_info['part_number'] if bundle_info['is_part'] else 'standalone'}"
+        )
+        if dedup.is_duplicate(filename, file_size):
+            log.info(f"[{msg_id}] DUPLICATE — skipping.")
+            state = mark_duplicate(state, msg_id)
+            log.info(f"[{msg_id}] Total time: {time.monotonic() - start_time:.1f}s")
+            return state
 
-    if not message.document:
-        log.info(f"[{msg_id}] No file — skipping")
-        return mark_processed(state, msg_id)
-
-    filename = get_filename(message)
-    file_size = get_size(message)
-
-    if not filename:
-        log.info(f"[{msg_id}] Document with no filename — skipping")
-        return mark_processed(state, msg_id)
-
-    bundle_info = detect_bundle(filename)
     size_mb = file_size / (1024 * 1024)
-
     log.info(
         f"[{msg_id}] File: '{filename}' ({size_mb:.1f} MB) | "
         f"Bundle: '{bundle_info['bundle_id']}' | "
         f"Part: {bundle_info['part_number'] if bundle_info['is_part'] else 'standalone'}"
     )
-
-    if dedup.is_duplicate(filename, file_size):
-        log.info(f"[{msg_id}] DUPLICATE — skipping.")
-        state = mark_duplicate(state, msg_id)
-        log.info(f"[{msg_id}] Total time: {time.monotonic() - start_time:.1f}s")
-        return state
 
     local_dl = None
     local_ul = None
@@ -250,8 +273,15 @@ async def process_message(user_client, bot_client, message, state, dedup):
             os.remove(local_dl)
             local_dl = None
 
-        dedup.mark_uploaded(filename, file_size)
-        state = mark_processed(state, msg_id, bundle_info)
+        if state_lock:
+            async with state_lock:
+                state = load_state()
+                dedup.mark_uploaded(filename, file_size)
+                state = mark_processed(state, msg_id, bundle_info)
+                save_state(state)
+        else:
+            dedup.mark_uploaded(filename, file_size)
+            state = mark_processed(state, msg_id, bundle_info)
         elapsed = time.monotonic() - start_time
         log.info(f"[{msg_id}] Done. Total time: {elapsed:.1f}s")
 
@@ -268,7 +298,13 @@ async def process_message(user_client, bot_client, message, state, dedup):
         raise
     except Exception as e:
         log.exception(f"[{msg_id}] Failed: {e}")
-        state = mark_failed(state, msg_id, str(e), bundle_info)
+        if state_lock:
+            async with state_lock:
+                state = load_state()
+                state = mark_failed(state, msg_id, str(e), bundle_info)
+                save_state(state)
+        else:
+            state = mark_failed(state, msg_id, str(e), bundle_info)
         for path in [local_dl, local_ul]:
             if path and os.path.exists(path):
                 try:
@@ -291,12 +327,30 @@ async def run_historical(user_client, bot_client, state, dedup, paused_ref: list
         return state
 
     total = len(messages)
-    for i, msg in enumerate(messages, 1):
+    state_lock = asyncio.Lock() if CONCURRENT_FILES > 1 else None
+    sem = asyncio.Semaphore(CONCURRENT_FILES) if CONCURRENT_FILES > 1 else None
+
+    async def process_one(i: int, msg):
         while paused_ref[0]:
             await asyncio.sleep(10)
-        log.info(f"─── {i}/{total} ───")
-        state = await process_message(user_client, bot_client, msg, state, dedup)
-        await asyncio.sleep(2)
+        if sem:
+            async with sem:
+                log.info(f"─── {i}/{total} ───")
+                return await process_message(user_client, bot_client, msg, state, dedup, state_lock=state_lock)
+        else:
+            log.info(f"─── {i}/{total} ───")
+            new_state = await process_message(user_client, bot_client, msg, state, dedup)
+            await asyncio.sleep(2)
+            return new_state
+
+    if CONCURRENT_FILES > 1:
+        log.info(f"Parallel download: up to {CONCURRENT_FILES} files at a time.")
+        tasks = [process_one(i, msg) for i, msg in enumerate(messages, 1)]
+        await asyncio.gather(*tasks)
+        state = load_state()
+    else:
+        for i, msg in enumerate(messages, 1):
+            state = await process_one(i, msg)
 
     log.info("=== Historical complete. Switching to LIVE MODE. ===")
     state['mode'] = 'live'
@@ -351,6 +405,8 @@ async def main_async(lock_path: str):
         )
     else:
         log.info("Drive staging: OFF — direct mode (files posted to destination with same filename as source).")
+    if CONCURRENT_FILES > 1:
+        log.info(f"Parallel downloads: up to {CONCURRENT_FILES} files at a time (set CONCURRENT_FILES in .env).")
 
     user_client = get_user_client()
     bot_client = get_bot_client()
