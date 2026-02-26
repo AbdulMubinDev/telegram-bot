@@ -50,7 +50,9 @@ def validate_env():
 
 
 def setup_lockfile():
-    """Create lockfile to prevent two instances (spec Part 10 rule 8)."""
+    """Create lockfile to prevent two instances (spec Part 10 rule 8).
+    Lock content is pid:hostname so we ignore locks from other containers (e.g. ./start.sh login while another container runs)."""
+    import socket
     state_file = os.getenv('STATE_FILE', 'state.json')
     lock_dir = os.path.dirname(os.path.abspath(state_file))
     if lock_dir and not os.path.isdir(lock_dir):
@@ -60,10 +62,24 @@ def setup_lockfile():
         os.makedirs(lock_dir, exist_ok=True)
     except OSError:
         pass
+    this_host = socket.gethostname()
     if os.path.exists(lock_path):
         try:
             with open(lock_path, 'r') as f:
-                old_pid = int(f.read().strip())
+                raw = f.read().strip()
+            # Format: "pid" (legacy) or "pid:hostname" (Docker-aware)
+            if ':' in raw:
+                old_pid_s, old_host = raw.split(':', 1)
+                old_pid = int(old_pid_s.strip())
+                if old_host.strip() != this_host:
+                    # Lock from another container; remove and take over
+                    try:
+                        os.remove(lock_path)
+                    except OSError:
+                        pass
+                    old_pid = None
+            else:
+                old_pid = int(raw)
         except (ValueError, OSError):
             old_pid = None
         if old_pid is not None:
@@ -73,6 +89,7 @@ def setup_lockfile():
                 pass
             else:
                 print(f"ERROR: Another instance may be running (PID {old_pid}). Lock file: {lock_path}", file=sys.stderr)
+                print("Stop it first (e.g. docker compose down) or remove the lock file.", file=sys.stderr)
                 sys.exit(1)
         try:
             os.remove(lock_path)
@@ -80,7 +97,7 @@ def setup_lockfile():
             pass
     try:
         with open(lock_path, 'w') as f:
-            f.write(str(os.getpid()))
+            f.write(f"{os.getpid()}:{this_host}")
         return lock_path
     except OSError as e:
         print(f"ERROR: Could not create lock file: {e}", file=sys.stderr)
