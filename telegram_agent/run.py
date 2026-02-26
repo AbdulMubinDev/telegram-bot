@@ -424,6 +424,12 @@ async def main_async(lock_path: str):
         log.info("Drive staging: OFF — direct mode (files posted to destination with same filename as source).")
     if CONCURRENT_FILES > 1:
         log.info(f"Parallel downloads: up to {CONCURRENT_FILES} files at a time (set CONCURRENT_FILES in .env).")
+    from . import telegram_handler as th
+    if th.PARALLEL_DOWNLOAD_THRESHOLD > 0:
+        log.info(
+            f"Multi-connection download: files > {th.PARALLEL_DOWNLOAD_THRESHOLD // (1024*1024)} MB "
+            f"use {th.PARALLEL_DOWNLOAD_CONNECTIONS} connections (PARALLEL_DOWNLOAD_* in .env)."
+        )
 
     user_client = get_user_client()
     bot_client = get_bot_client()

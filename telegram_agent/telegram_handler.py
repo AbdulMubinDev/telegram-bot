@@ -1,6 +1,7 @@
 """
 Telegram handler for repost agent (v3.0).
 User client (MTProto) for reading/downloading; bot client for posting to destination.
+Large files use parallel (multi-connection) download for much higher speed.
 """
 import os
 import asyncio
@@ -10,6 +11,11 @@ from telethon.tl.types import DocumentAttributeFilename
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Parallel download: above this size (bytes) use multi-connection download (aria2c-style)
+PARALLEL_DOWNLOAD_THRESHOLD = int(os.getenv('PARALLEL_DOWNLOAD_THRESHOLD', str(100 * 1024 * 1024)))  # 100 MB
+# Number of connections per file for parallel download (8–16 typical; higher may hit flood limits)
+PARALLEL_DOWNLOAD_CONNECTIONS = max(2, min(20, int(os.getenv('PARALLEL_DOWNLOAD_CONNECTIONS', '12'))))
 
 API_ID = int(os.getenv('TG_API_ID'))
 API_HASH = os.getenv('TG_API_HASH')
@@ -74,12 +80,37 @@ async def get_destination_posts(client, limit: int = 500) -> list:
 
 async def download_file(client, message, filename: str) -> str:
     local_path = os.path.join(TEMP_DIR, filename)
-    size_mb = get_size(message) / (1024 * 1024)
-    print(f"  Downloading: {filename} ({size_mb:.1f} MB)")
-    await client.download_media(
-        message, file=local_path,
-        progress_callback=lambda c, t: print(f"  TG DL: {c/t*100:.1f}%", end='\r')
-    )
+    file_size = get_size(message)
+    size_mb = file_size / (1024 * 1024)
+
+    def progress(c, t):
+        if t and t > 0:
+            print(f"  TG DL: {c/t*100:.1f}%", end='\r')
+
+    if file_size >= PARALLEL_DOWNLOAD_THRESHOLD:
+        print(f"  Downloading: {filename} ({size_mb:.1f} MB) [parallel, {PARALLEL_DOWNLOAD_CONNECTIONS} connections]")
+        try:
+            from .parallel_transfer import download_file_parallel
+            await download_file_parallel(
+                client,
+                message.document,
+                local_path,
+                file_size,
+                progress_callback=progress,
+                connection_count=PARALLEL_DOWNLOAD_CONNECTIONS,
+            )
+        except Exception as e:
+            print(f"  Parallel download failed ({e}), falling back to single connection...")
+            await client.download_media(
+                message, file=local_path,
+                progress_callback=progress
+            )
+    else:
+        print(f"  Downloading: {filename} ({size_mb:.1f} MB)")
+        await client.download_media(
+            message, file=local_path,
+            progress_callback=progress
+        )
     print(f"\n  Downloaded: {local_path}")
     return local_path
 
