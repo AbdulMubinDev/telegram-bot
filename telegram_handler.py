@@ -84,9 +84,17 @@ async def download_file(client, message, filename: str) -> str:
     return local_path
 
 
-async def upload_file(bot_client, file_path: str, caption: str) -> int:
-    print(f"  Uploading to destination channel...")
-    msg = await bot_client.send_file(
+BOT_UPLOAD_LIMIT = 50 * 1024 * 1024  # 50 MB
+
+
+async def upload_file(bot_client, file_path: str, caption: str, user_client=None) -> int:
+    """Upload to destination. Uses user_client for files > 50 MB (bot API limit)."""
+    file_size = os.path.getsize(file_path)
+    use_user = user_client and file_size > BOT_UPLOAD_LIMIT
+    client = user_client if use_user else bot_client
+    via = "user-client" if use_user else "bot"
+    print(f"  Uploading to destination channel via {via} ({file_size / (1024*1024):.1f} MB)...")
+    msg = await client.send_file(
         DEST_CHANNEL_ID, file_path, caption=caption,
         progress_callback=lambda c, t: print(f"  TG UL: {c/t*100:.1f}%", end='\r')
     )

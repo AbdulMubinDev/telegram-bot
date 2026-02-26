@@ -32,16 +32,18 @@ from admin_handler import register_admin_handlers
 
 load_dotenv()
 
-# Required env vars (spec Part 11: fail immediately if missing)
+USE_DRIVE_STAGING = os.getenv('USE_DRIVE_STAGING', 'false').lower() in ('true', '1', 'yes')
+
 REQUIRED_ENV = [
     'TG_API_ID', 'TG_API_HASH', 'BOT_TOKEN', 'SOURCE_CHANNEL',
-    'DEST_CHANNEL_ID', 'DRIVE_ROOT_FOLDER_ID', 'CREDENTIALS_PATH',
-    'TEMP_DIR', 'STATE_FILE', 'LOG_FILE'
+    'DEST_CHANNEL_ID', 'TEMP_DIR', 'STATE_FILE', 'LOG_FILE'
 ]
+REQUIRED_ENV_DRIVE = ['DRIVE_ROOT_FOLDER_ID', 'CREDENTIALS_PATH']
 
 
 def validate_env():
-    missing = [k for k in REQUIRED_ENV if not os.getenv(k)]
+    required = REQUIRED_ENV + (REQUIRED_ENV_DRIVE if USE_DRIVE_STAGING else [])
+    missing = [k for k in required if not os.getenv(k)]
     if missing:
         print(f"ERROR: Missing required environment variables: {', '.join(missing)}", file=sys.stderr)
         print("Set them in .env or the environment. See .env.example.", file=sys.stderr)
@@ -168,6 +170,11 @@ async def process_message(user_client, bot_client, message, state, dedup):
 
     filename = get_filename(message)
     file_size = get_size(message)
+
+    if not filename:
+        log.info(f"[{msg_id}] Document with no filename — skipping")
+        return mark_processed(state, msg_id)
+
     bundle_info = detect_bundle(filename)
     size_mb = file_size / (1024 * 1024)
 
@@ -186,11 +193,15 @@ async def process_message(user_client, bot_client, message, state, dedup):
     local_dl = None
     local_ul = None
     drive_file_id = None
+    caption = get_message_caption(message) or filename
 
     try:
-        log.info(f"[{msg_id}] 1/5 Downloading from Telegram...")
+        # STEP 1: Download from source Telegram
+        step_total = 5 if USE_DRIVE_STAGING else 2
+        log.info(f"[{msg_id}] 1/{step_total} Downloading from Telegram...")
+        safe_filename = filename.replace('/', '_').replace('\\', '_')
         local_dl = await download_file_with_retry(
-            user_client, message, f"dl_{msg_id}_{filename}"
+            user_client, message, f"dl_{msg_id}_{safe_filename}"
         )
         expected_size = get_size(message)
         if os.path.getsize(local_dl) != expected_size:
@@ -198,46 +209,56 @@ async def process_message(user_client, bot_client, message, state, dedup):
                 f"Size mismatch: disk={os.path.getsize(local_dl)}, expected={expected_size}"
             )
 
-        log.info(f"[{msg_id}] 2/5 Uploading to Drive folder '{bundle_info['bundle_id']}'...")
-        drive_file_id = upload_to_drive_with_retry(local_dl, filename, bundle_info['bundle_id'])
+        if USE_DRIVE_STAGING:
+            # STEP 2: Upload to Drive
+            log.info(f"[{msg_id}] 2/5 Uploading to Drive folder '{bundle_info['bundle_id']}'...")
+            drive_file_id = upload_to_drive_with_retry(local_dl, filename, bundle_info['bundle_id'])
+            os.remove(local_dl)
+            local_dl = None
 
-        os.remove(local_dl)
-        local_dl = None
+            # STEP 3: Re-download from Drive
+            log.info(f"[{msg_id}] 3/5 Re-downloading from Drive...")
+            local_ul = os.path.join(TEMP_DIR, f"up_{msg_id}_{safe_filename}")
+            download_from_drive(drive_file_id, local_ul)
 
-        log.info(f"[{msg_id}] 3/5 Re-downloading from Drive...")
-        local_ul = os.path.join(TEMP_DIR, f"up_{msg_id}_{filename}")
-        download_from_drive(drive_file_id, local_ul)
+            # STEP 4: Upload to destination
+            log.info(f"[{msg_id}] 4/5 Uploading to destination channel...")
+            try:
+                await upload_file(bot_client, local_ul, caption=caption, user_client=user_client)
+            except FloodWaitError as e:
+                log.warning(f"[{msg_id}] FloodWait {e.seconds}s — waiting then retrying...")
+                await asyncio.sleep(e.seconds + 5)
+                await upload_file(bot_client, local_ul, caption=caption, user_client=user_client)
+            os.remove(local_ul)
+            local_ul = None
 
-        log.info(f"[{msg_id}] 4/5 Uploading to destination channel...")
-        # Use same caption/text as source so the repost looks the same; fallback to filename for dedup
-        caption = get_message_caption(message) or filename
-        try:
-            await upload_file(bot_client, local_ul, caption=caption)
-        except FloodWaitError as e:
-            log.warning(f"[{msg_id}] FloodWait {e.seconds}s — waiting then retrying...")
-            await asyncio.sleep(e.seconds + 5)
-            await upload_file(bot_client, local_ul, caption=caption)
-
-        os.remove(local_ul)
-        local_ul = None
-
-        log.info(f"[{msg_id}] 5/5 Verifying upload...")
-        drive_meta = get_last_drive_file_in_folder(bundle_info['bundle_id'])
-        tg_last = await get_last_dest_post(user_client)
-
-        drive_name = drive_meta.get('name', '').lower().strip()
-        tg_name = tg_last.get('filename', '').lower().strip()
-        drive_size = int(drive_meta.get('size', -1))
-        tg_size = tg_last.get('size', -2)
-
-        if drive_name == tg_name and drive_size == tg_size:
-            log.info(f"[{msg_id}] Verification PASSED — deleting from Drive.")
-            delete_from_drive(drive_file_id)
+            # STEP 5: Verify and clean up Drive
+            log.info(f"[{msg_id}] 5/5 Verifying upload...")
+            drive_meta = get_last_drive_file_in_folder(bundle_info['bundle_id'])
+            tg_last = await get_last_dest_post(user_client)
+            drive_name = drive_meta.get('name', '').lower().strip()
+            tg_name = tg_last.get('filename', '').lower().strip()
+            drive_size = int(drive_meta.get('size', -1))
+            tg_size = tg_last.get('size', -2)
+            if drive_name == tg_name and drive_size == tg_size:
+                log.info(f"[{msg_id}] Verification PASSED — deleting from Drive.")
+                delete_from_drive(drive_file_id)
+            else:
+                log.warning(
+                    f"[{msg_id}] Verification MISMATCH — Drive file kept as backup. "
+                    f"Drive='{drive_name}'({drive_size}B) | TG='{tg_name}'({tg_size}B)"
+                )
         else:
-            log.warning(
-                f"[{msg_id}] Verification MISMATCH — Drive file kept as backup. "
-                f"Drive='{drive_name}'({drive_size}B) | TG='{tg_name}'({tg_size}B)"
-            )
+            # Direct mode (no Drive): upload straight from local temp to destination
+            log.info(f"[{msg_id}] 2/{step_total} Uploading to destination channel...")
+            try:
+                await upload_file(bot_client, local_dl, caption=caption, user_client=user_client)
+            except FloodWaitError as e:
+                log.warning(f"[{msg_id}] FloodWait {e.seconds}s — waiting then retrying...")
+                await asyncio.sleep(e.seconds + 5)
+                await upload_file(bot_client, local_dl, caption=caption, user_client=user_client)
+            os.remove(local_dl)
+            local_dl = None
 
         dedup.mark_uploaded(filename, file_size)
         state = mark_processed(state, msg_id, bundle_info)
