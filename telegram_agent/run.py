@@ -344,6 +344,13 @@ async def main_async(lock_path: str):
         f"Dupes skipped: {state.get('skipped_duplicates', 0)} | "
         f"Bundles tracked: {len(state.get('bundles', {}))}"
     )
+    if USE_DRIVE_STAGING:
+        log.warning(
+            "Drive staging is ON. Service accounts often get storageQuotaExceeded on personal Drive. "
+            "Set USE_DRIVE_STAGING=false in .env for direct mode (source → destination, same filename)."
+        )
+    else:
+        log.info("Drive staging: OFF — direct mode (files posted to destination with same filename as source).")
 
     user_client = get_user_client()
     bot_client = get_bot_client()

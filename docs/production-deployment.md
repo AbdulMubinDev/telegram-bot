@@ -474,6 +474,7 @@ If you get `AuthKeyError` or session invalid:
 | ChannelPrivateError / can’t read source | Source channel username correct; user account in the channel if it’s private.                                                  |
 | ChatWriteForbiddenError                 | Bot not admin in destination channel or missing “Post messages” / “Send files”.                                                |
 | Drive 403 / upload fails                | Drive folder shared with service account email; Drive API enabled.                                                             |
+| **storageQuotaExceeded** (Drive)        | **Set `USE_DRIVE_STAGING=false` in `.env`.** Service accounts have no quota on personal Drive. Direct mode posts to destination with the same filename as the source. |
 | Disk full                               | Free space in `TEMP_DIR`; clear `temp/`; ensure enough of the 75 GB is reserved for the agent; reduce log retention.           |
 | FloodWaitError                          | Handled by script (wait + retry); if frequent, reduce posting rate or wait.                                                    |
 | Website affected                        | Agent runs as `telegram-agent` under `/opt/telegram-agent`; ensure no nginx/web root points there and no new ports are opened. |
